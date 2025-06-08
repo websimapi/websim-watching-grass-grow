@@ -44,8 +44,8 @@ function setupAudio() {
 }
 
 // Constants
-const GRASS_GROWTH_RATE = 0.0004; // How fast grass grows per game hour (realistic: ~1-3 inches per week)
-const MOISTURE_LOSS_RATE = 0.5;  // How much moisture is lost per game hour
+const GRASS_GROWTH_RATE = 0.000067; // Much slower grass growth rate
+const MOISTURE_LOSS_RATE = 0.083;   // Proportionally slower moisture loss
 const LAWN_SIZE = 20;            // Size of the lawn (width and depth)
 const GRASS_DENSITY = 30000;     // Number of grass blades
 
@@ -253,8 +253,9 @@ function updateGrassAppearance() {
         grass.height = grass.height * 0.98 + targetHeight * 0.02; // Slower, more realistic transition
 
         // Add subtle wind sway effect
-        const time = performance.now() * 0.0005; // Slower sway
-        const windStrength = 0.3;
+        const time = performance.now() * 0.0002; // Even slower, more gentle sway
+        const windStrength = 0.15; // Reduced wind strength for subtlety
+
         const swayX = Math.sin(time * 2 + grass.swayOffset) * grass.swayAmount * grass.height * windStrength;
         const swayZ = Math.cos(time * 1.5 + grass.swayOffset) * grass.swayAmount * 0.5 * grass.height * windStrength;
 
@@ -300,8 +301,8 @@ function updateSunPosition() {
 function updateGameTime() {
     if (gameState.paused) return;
 
-    // Update game time - normal clock speed (1 real hour = 1 game hour)
-    gameState.hour += (1/3600) * gameState.timeSpeed / 60;
+    // Update game time - much slower for realistic observation (1 game hour = 2.5 real minutes)
+    gameState.hour += 0.0185 * gameState.timeSpeed / 60; // Much slower time progression
 
     if (gameState.hour >= 24) {
         gameState.hour = 0;
@@ -330,11 +331,9 @@ function updateGameTime() {
 
     // Health is affected by moisture
     if (gameState.grassMoisture < 20) {
-        gameState.grassHealth -= 0.2 * gameState.timeSpeed / 60;
-        if (gameState.grassHealth < 0) gameState.grassHealth = 0;
+        gameState.grassHealth -= 0.033 * gameState.timeSpeed / 60; // Slower health decline
     } else if (gameState.grassHealth < 100 && gameState.grassMoisture > 40) {
-        gameState.grassHealth += 0.1 * gameState.timeSpeed / 60;
-        if (gameState.grassHealth > 100) gameState.grassHealth = 100;
+        gameState.grassHealth += 0.017 * gameState.timeSpeed / 60; // Slower health recovery
     }
 
     // Update UI
