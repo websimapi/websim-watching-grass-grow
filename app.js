@@ -44,7 +44,7 @@ function setupAudio() {
 }
 
 // Constants
-const GRASS_GROWTH_RATE = 0.002; // How fast grass grows per game hour
+const GRASS_GROWTH_RATE = 0.0004; // How fast grass grows per game hour (realistic: ~1-3 inches per week)
 const MOISTURE_LOSS_RATE = 0.5;  // How much moisture is lost per game hour
 const LAWN_SIZE = 20;            // Size of the lawn (width and depth)
 const GRASS_DENSITY = 30000;     // Number of grass blades
@@ -118,9 +118,52 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 // Grass instanced mesh
-const instancedGrassGeometry = new THREE.PlaneGeometry(0.1, 0.3);
-instancedGrassGeometry.translate(0, 0.15, 0);
+function createGrassBladeGeometry() {
+    const geometry = new THREE.BufferGeometry();
+    
+    // Create a tapered grass blade shape
+    const width = 0.02;
+    const height = 0.4;
+    const segments = 4;
+    
+    const vertices = [];
+    const indices = [];
+    const uvs = [];
+    
+    // Create vertices for a tapered blade
+    for (let i = 0; i <= segments; i++) {
+        const y = (i / segments) * height;
+        const widthAtHeight = width * (1 - (i / segments) * 0.8); // Taper towards tip
+        const curve = Math.sin((i / segments) * Math.PI * 0.3) * 0.02; // Slight curve
+        
+        // Left vertex
+        vertices.push(-widthAtHeight / 2, y, curve);
+        uvs.push(0, i / segments);
+        
+        // Right vertex  
+        vertices.push(widthAtHeight / 2, y, curve);
+        uvs.push(1, i / segments);
+    }
+    
+    // Create triangles
+    for (let i = 0; i < segments; i++) {
+        const bottom = i * 2;
+        const top = (i + 1) * 2;
+        
+        // Two triangles per segment
+        indices.push(bottom, bottom + 1, top);
+        indices.push(bottom + 1, top + 1, top);
+    }
+    
+    geometry.setIndex(indices);
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.computeVertexNormals();
+    
+    return geometry;
+}
 
+const instancedGrassGeometry = createGrassBladeGeometry();
 const grassMaterial = new THREE.MeshStandardMaterial({
     color: 0x33aa33,
     side: THREE.DoubleSide,
@@ -149,9 +192,9 @@ for (let i = 0; i < GRASS_DENSITY; i++) {
     grassPositions.push({
         x: x,
         z: z,
-        height: 0.1 + Math.random() * 0.1, // Initial height variation
+        height: 0.05 + Math.random() * 0.03, // Smaller initial height variation
         swayOffset: Math.random() * Math.PI * 2, // Random sway phase offset
-        swayAmount: 0.05 + Math.random() * 0.05  // Random sway amount
+        swayAmount: 0.02 + Math.random() * 0.03  // Reduced sway amount for realism
     });
 
     // Set position
@@ -159,6 +202,10 @@ for (let i = 0; i < GRASS_DENSITY; i++) {
 
     // Random rotation around Y axis
     dummy.rotation.y = Math.random() * Math.PI;
+    
+    // Slight random tilt for natural look
+    dummy.rotation.x = (Math.random() - 0.5) * 0.1;
+    dummy.rotation.z = (Math.random() - 0.5) * 0.1;
 
     // Apply to instanced mesh
     dummy.updateMatrix();
@@ -188,10 +235,11 @@ function updateGrassAppearance() {
     const healthFactor = gameState.grassHealth / 100;
     const moistureFactor = gameState.grassMoisture / 100;
 
-    // Calculate grass color based on health and moisture
-    const hue = 90 + (30 * (1 - healthFactor)); // 90 (green) to 120 (yellow-green)
-    const saturation = 50 + (30 * healthFactor * moistureFactor);
-    const lightness = 35 + (10 * (1 - moistureFactor));
+    // Calculate grass color based on health and moisture - more realistic green tones
+    const baseHue = 120; // Pure green
+    const hue = baseHue - (20 * (1 - healthFactor)); // 120 (green) to 100 (yellow-green)
+    const saturation = 40 + (30 * healthFactor * moistureFactor); // More muted, realistic colors
+    const lightness = 25 + (15 * moistureFactor); // Darker, more natural grass color
 
     grassMaterial.color.setHSL(hue/360, saturation/100, lightness/100);
 
@@ -200,17 +248,20 @@ function updateGrassAppearance() {
         const grass = grassPositions[i];
 
         // Calculate current grass height based on growth and health
-        const targetHeight = gameState.grassHeight * (0.8 + Math.random() * 0.4) * healthFactor;
-        grass.height = grass.height * 0.95 + targetHeight * 0.05; // Smooth transition
+        const maxHeight = 0.3; // Maximum realistic grass height (about 12 inches)
+        const targetHeight = Math.min(gameState.grassHeight, maxHeight) * (0.7 + Math.random() * 0.6) * healthFactor;
+        grass.height = grass.height * 0.98 + targetHeight * 0.02; // Slower, more realistic transition
 
-        // Add wind sway effect
-        const time = performance.now() * 0.001;
-        const swayX = Math.sin(time + grass.swayOffset) * grass.swayAmount * grass.height;
+        // Add subtle wind sway effect
+        const time = performance.now() * 0.0005; // Slower sway
+        const windStrength = 0.3;
+        const swayX = Math.sin(time * 2 + grass.swayOffset) * grass.swayAmount * grass.height * windStrength;
+        const swayZ = Math.cos(time * 1.5 + grass.swayOffset) * grass.swayAmount * 0.5 * grass.height * windStrength;
 
         // Apply transformations
         dummy.position.set(grass.x, 0, grass.z);
-        dummy.scale.set(1, grass.height / 0.3, 1); // Scale y-axis for height
-        dummy.rotation.set(0, Math.random() * Math.PI * 2, swayX);
+        dummy.scale.set(0.8 + Math.random() * 0.4, grass.height / 0.4, 0.8 + Math.random() * 0.4); // More height variation
+        dummy.rotation.set(swayX, Math.random() * Math.PI * 2, swayZ);
 
         dummy.updateMatrix();
         grassInstancedMesh.setMatrixAt(i, dummy.matrix);
@@ -249,8 +300,8 @@ function updateSunPosition() {
 function updateGameTime() {
     if (gameState.paused) return;
 
-    // Update game time
-    gameState.hour += 1 * gameState.timeSpeed / 60; // Advance time (each real second = 1 minute of game time)
+    // Update game time - slower for more realistic observation
+    gameState.hour += 0.5 * gameState.timeSpeed / 60; // Slower time progression
 
     if (gameState.hour >= 24) {
         gameState.hour = 0;
@@ -264,11 +315,12 @@ function updateGameTime() {
     if (gameState.hour >= 6 && gameState.hour <= 18) { // Only grow during daylight
         // Growth is affected by health and moisture
         const growthFactor = (gameState.grassHealth / 100) * (gameState.grassMoisture / 100);
-        gameState.grassHeight += GRASS_GROWTH_RATE * growthFactor * gameState.timeSpeed / 60;
+        const seasonalFactor = 0.8 + 0.4 * Math.sin((gameState.day / 365) * Math.PI * 2); // Seasonal growth variation
+        gameState.grassHeight += GRASS_GROWTH_RATE * growthFactor * seasonalFactor * gameState.timeSpeed / 60;
 
-        // Cap maximum grass height
-        if (gameState.grassHeight > 1) {
-            gameState.grassHeight = 1;
+        // Cap maximum grass height to realistic levels
+        if (gameState.grassHeight > 0.25) { // About 10 inches maximum
+            gameState.grassHeight = 0.25;
         }
     }
 
