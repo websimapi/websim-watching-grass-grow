@@ -11,7 +11,8 @@ const gameState = {
     grassHealth: 100,
     grassMoisture: 50,
     timeSpeed: 1, // 1 = normal, 2 = 2x speed, etc.
-    paused: false
+    paused: false,
+    lastRealTime: performance.now() // Track real time for realistic progression
 };
 
 // Audio setup
@@ -44,8 +45,8 @@ function setupAudio() {
 }
 
 // Constants
-const GRASS_GROWTH_RATE = 0.000067; // Much slower grass growth rate
-const MOISTURE_LOSS_RATE = 0.083;   // Proportionally slower moisture loss
+const GRASS_GROWTH_RATE = 0.0004; // How fast grass grows per game hour (realistic: ~1-3 inches per week)
+const MOISTURE_LOSS_RATE = 0.5;  // How much moisture is lost per game hour
 const LAWN_SIZE = 20;            // Size of the lawn (width and depth)
 const GRASS_DENSITY = 30000;     // Number of grass blades
 
@@ -253,9 +254,8 @@ function updateGrassAppearance() {
         grass.height = grass.height * 0.98 + targetHeight * 0.02; // Slower, more realistic transition
 
         // Add subtle wind sway effect
-        const time = performance.now() * 0.0002; // Even slower, more gentle sway
-        const windStrength = 0.15; // Reduced wind strength for subtlety
-
+        const time = performance.now() * 0.0005; // Slower sway
+        const windStrength = 0.3;
         const swayX = Math.sin(time * 2 + grass.swayOffset) * grass.swayAmount * grass.height * windStrength;
         const swayZ = Math.cos(time * 1.5 + grass.swayOffset) * grass.swayAmount * 0.5 * grass.height * windStrength;
 
@@ -301,8 +301,14 @@ function updateSunPosition() {
 function updateGameTime() {
     if (gameState.paused) return;
 
-    // Update game time - much slower for realistic observation (1 game hour = 2.5 real minutes)
-    gameState.hour += 0.0185 * gameState.timeSpeed / 60; // Much slower time progression
+    // Calculate real time elapsed since last update
+    const currentRealTime = performance.now();
+    const realTimeElapsed = (currentRealTime - gameState.lastRealTime) / 1000; // Convert to seconds
+    gameState.lastRealTime = currentRealTime;
+
+    // Update game time - 1 real minute = 1 game hour for realistic observation
+    const gameTimeElapsed = (realTimeElapsed / 60) * gameState.timeSpeed; // 60 real seconds = 1 game hour
+    gameState.hour += gameTimeElapsed;
 
     if (gameState.hour >= 24) {
         gameState.hour = 0;
@@ -317,7 +323,7 @@ function updateGameTime() {
         // Growth is affected by health and moisture
         const growthFactor = (gameState.grassHealth / 100) * (gameState.grassMoisture / 100);
         const seasonalFactor = 0.8 + 0.4 * Math.sin((gameState.day / 365) * Math.PI * 2); // Seasonal growth variation
-        gameState.grassHeight += GRASS_GROWTH_RATE * growthFactor * seasonalFactor * gameState.timeSpeed / 60;
+        gameState.grassHeight += GRASS_GROWTH_RATE * growthFactor * seasonalFactor * gameTimeElapsed;
 
         // Cap maximum grass height to realistic levels
         if (gameState.grassHeight > 0.25) { // About 10 inches maximum
@@ -326,14 +332,16 @@ function updateGameTime() {
     }
 
     // Decrease moisture over time
-    gameState.grassMoisture -= MOISTURE_LOSS_RATE * gameState.timeSpeed / 60;
+    gameState.grassMoisture -= MOISTURE_LOSS_RATE * gameTimeElapsed;
     if (gameState.grassMoisture < 0) gameState.grassMoisture = 0;
 
     // Health is affected by moisture
     if (gameState.grassMoisture < 20) {
-        gameState.grassHealth -= 0.033 * gameState.timeSpeed / 60; // Slower health decline
+        gameState.grassHealth -= 0.2 * gameTimeElapsed;
+        if (gameState.grassHealth < 0) gameState.grassHealth = 0;
     } else if (gameState.grassHealth < 100 && gameState.grassMoisture > 40) {
-        gameState.grassHealth += 0.017 * gameState.timeSpeed / 60; // Slower health recovery
+        gameState.grassHealth += 0.1 * gameTimeElapsed;
+        if (gameState.grassHealth > 100) gameState.grassHealth = 100;
     }
 
     // Update UI
@@ -422,6 +430,7 @@ function init() {
     setupAudio();
     initializeButtons();
     updateUI();
+    gameState.lastRealTime = performance.now(); // Initialize the timer
     animate();
 }
 
