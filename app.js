@@ -11,8 +11,7 @@ const gameState = {
     grassHealth: 100,
     grassMoisture: 50,
     timeSpeed: 1, // 1 = normal, 2 = 2x speed, etc.
-    paused: false,
-    lastRealTime: performance.now() // Track real time for realistic progression
+    paused: false
 };
 
 // Audio setup
@@ -301,14 +300,8 @@ function updateSunPosition() {
 function updateGameTime() {
     if (gameState.paused) return;
 
-    // Calculate real time elapsed since last update
-    const currentRealTime = performance.now();
-    const realTimeElapsed = (currentRealTime - gameState.lastRealTime) / 1000; // Convert to seconds
-    gameState.lastRealTime = currentRealTime;
-
-    // Update game time - 1 real minute = 1 game hour for realistic observation
-    const gameTimeElapsed = (realTimeElapsed / 60) * gameState.timeSpeed; // 60 real seconds = 1 game hour
-    gameState.hour += gameTimeElapsed;
+    // Update game time - slower for more realistic observation
+    gameState.hour += 0.5 * gameState.timeSpeed / 60; // Slower time progression
 
     if (gameState.hour >= 24) {
         gameState.hour = 0;
@@ -323,7 +316,7 @@ function updateGameTime() {
         // Growth is affected by health and moisture
         const growthFactor = (gameState.grassHealth / 100) * (gameState.grassMoisture / 100);
         const seasonalFactor = 0.8 + 0.4 * Math.sin((gameState.day / 365) * Math.PI * 2); // Seasonal growth variation
-        gameState.grassHeight += GRASS_GROWTH_RATE * growthFactor * seasonalFactor * gameTimeElapsed;
+        gameState.grassHeight += GRASS_GROWTH_RATE * growthFactor * seasonalFactor * gameState.timeSpeed / 60;
 
         // Cap maximum grass height to realistic levels
         if (gameState.grassHeight > 0.25) { // About 10 inches maximum
@@ -332,15 +325,15 @@ function updateGameTime() {
     }
 
     // Decrease moisture over time
-    gameState.grassMoisture -= MOISTURE_LOSS_RATE * gameTimeElapsed;
+    gameState.grassMoisture -= MOISTURE_LOSS_RATE * gameState.timeSpeed / 60;
     if (gameState.grassMoisture < 0) gameState.grassMoisture = 0;
 
     // Health is affected by moisture
     if (gameState.grassMoisture < 20) {
-        gameState.grassHealth -= 0.2 * gameTimeElapsed;
+        gameState.grassHealth -= 0.2 * gameState.timeSpeed / 60;
         if (gameState.grassHealth < 0) gameState.grassHealth = 0;
     } else if (gameState.grassHealth < 100 && gameState.grassMoisture > 40) {
-        gameState.grassHealth += 0.1 * gameTimeElapsed;
+        gameState.grassHealth += 0.1 * gameState.timeSpeed / 60;
         if (gameState.grassHealth > 100) gameState.grassHealth = 100;
     }
 
@@ -430,7 +423,6 @@ function init() {
     setupAudio();
     initializeButtons();
     updateUI();
-    gameState.lastRealTime = performance.now(); // Initialize the timer
     animate();
 }
 
